@@ -19,18 +19,18 @@ app = FastAPI()
 
 def send_message(chat_id, text, keyboard=None):
 
-    data = {
+    payload = {
         "chat_id": chat_id,
         "text": text
     }
 
     if keyboard:
-        data["inline_keyboard"] = keyboard
+        payload["inline_keyboard"] = keyboard
 
     requests.post(
         f"{API}/messages",
         headers=HEADERS,
-        json=data
+        json=payload
     )
 
 
@@ -55,55 +55,59 @@ def load_clubs():
     return clubs
 
 
-def load_masters():
+def load_masterclasses():
 
     if not os.path.exists("masterclasses.json"):
         return []
 
-    with open("masterclasses.json", "r", encoding="utf8") as f:
+    with open("masterclasses.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 @app.get("/")
-def home():
+def health():
     return {"status": "bot running"}
 
 
 @app.post("/webhook")
-async def webhook(req: Request):
+async def webhook(request: Request):
 
-    data = await req.json()
+    data = await request.json()
 
     if "message" in data:
 
-        msg = data["message"]
+        message = data["message"]
 
-        chat_id = msg["chat"]["id"]
-        text = msg.get("text", "")
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "")
 
         if text == "/start":
+
+            keyboard = [
+                [{"text": "🎨 Кружки", "callback_data": "clubs"}],
+                [{"text": "🧩 Мастер-классы", "callback_data": "masters"}],
+                [{"text": "✉ Поддержка", "callback_data": "support"}]
+            ]
 
             send_message(
                 chat_id,
                 "Привет! Я бот центра Виктор 🎨\n\nВыберите раздел:",
-                [
-                    [{"text": "🎨 Кружки", "callback_data": "clubs"}],
-                    [{"text": "🧩 Мастер-классы", "callback_data": "masters"}],
-                    [{"text": "✉ Поддержка", "callback_data": "support"}]
-                ]
+                keyboard
             )
 
         else:
 
-            send_message(chat_id, "Используйте меню 👇")
-
+            send_message(
+                chat_id,
+                "Напишите /start чтобы открыть меню."
+            )
 
     if "callback_query" in data:
 
-        cb = data["callback_query"]
+        callback = data["callback_query"]
 
-        chat_id = cb["message"]["chat"]["id"]
-        data_cb = cb["data"]
+        chat_id = callback["message"]["chat"]["id"]
+        data_cb = callback["data"]
 
         if data_cb == "clubs":
 
@@ -112,32 +116,30 @@ async def webhook(req: Request):
             text = "🎨 Наши кружки:\n\n"
 
             for c in clubs[:10]:
-
                 text += f"{c['name']} ({c['age']})\n"
 
             send_message(chat_id, text)
 
-
         if data_cb == "masters":
 
-            masters = load_masters()
+            masters = load_masterclasses()
 
             if not masters:
-                send_message(chat_id, "Пока нет мастер-классов")
+                send_message(chat_id, "Пока нет мастер-классов.")
                 return {"ok": True}
 
             text = "🧩 Мастер-классы:\n\n"
 
             for m in masters:
-
                 text += f"{m['title']} — {m['date']}\n"
 
             send_message(chat_id, text)
 
-
         if data_cb == "support":
 
-            send_message(chat_id, "Напишите сообщение и администратор получит его.")
-
+            send_message(
+                chat_id,
+                "Напишите сообщение, и администратор получит его."
+            )
 
     return {"ok": True}
